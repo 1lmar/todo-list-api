@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # Сервис для NestJS приложения
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nestjs-app
+    ports:
+      - "3000:3000" # Открываем порт 3000 для доступа к приложению
+    environment:
+      - DATABASE_HOST=db
+      - DATABASE_PORT=${DATABASE_PORT}
+      - DATABASE_USER=${DATABASE_USER}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_NAME=${DATABASE_NAME}
+    depends_on:
+      - db # NestJS зависит от PostgreSQL
+    restart: always
+
+  # Сервис для PostgreSQL
+  db:
+    image: postgres:14-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    ports:
+      - "5432:5432" # Открываем порт 5432 для PostgreSQL
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Сохраняем данные в volume
+    restart: always
+
+volumes:
+  postgres_data:
