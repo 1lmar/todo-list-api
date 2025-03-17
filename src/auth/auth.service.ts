@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../users/users.service';
+import { IUserRegisterParams, UsersService } from '../users/users.service';
 
 @Injectable()
 export class AuthService {
@@ -25,12 +25,21 @@ export class AuthService {
     };
   }
 
-  async register(username: string, password: string) {
-    const existingUser = await this.usersService.findOne(username);
+  async register(params: IUserRegisterParams) {
+    const existingUser = await this.usersService.findOne(params.username);
     if (existingUser) {
       throw new Error('Username already exists');
     }
 
-    return this.usersService.register(username, password);
+    return this.usersService.register(params);
+  }
+
+  async getUser(username: string) {
+    const user = await this.usersService.findOne(username);
+    if (!user) {
+      throw new Error('no user');
+    }
+
+    return user;
   }
 }

@@ -18,8 +18,15 @@ export class AuthController {
   async register(
     @Body('username') username: string,
     @Body('password') password: string,
+    @Body('fullName') fullName: string,
+    @Body('avatar') avatar: string,
   ) {
-    const result = await this.authService.register(username, password);
+    const result = await this.authService.register({
+      username,
+      password,
+      fullName,
+      avatar,
+    });
 
     return {
       ...result,
@@ -41,8 +48,13 @@ export class AuthController {
 
   @Get('profile')
   @UseGuards(AuthGuard('jwt')) // Защита маршрута с помощью JWT-стратегии
-  getProfile(@Request() req) {
-    // Возвращаем данные пользователя из payload токена
-    return req.user;
+  async getProfile(@Request() req) {
+    const user = await this.authService.getUser(req.user.username);
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      avatar: user.avatar,
+      username: user.username,
+    };
   }
 }

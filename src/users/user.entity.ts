@@ -6,6 +6,12 @@ export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ nullable: true })
+  fullName: string;
+
+  @Column({ nullable: true })
+  avatar: string;
+
   @Column({ unique: true })
   username: string;
 
