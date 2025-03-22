@@ -1,0 +1,87 @@
+name: Deploy Api
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  tag_release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.create_tag.outputs.new_tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch all tags
+        run: git fetch --tags
+
+      - name: Get latest tag
+        id: get_latest_tag
+        run: |
+          LATEST_TAG=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          echo "Latest tag: $LATEST_TAG"
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_ENV
+
+      - name: Generate new version
+        run: |
+          LATEST_TAG="${{ env.latest_tag }}"
+          
+          if [[ "$LATEST_TAG" == "none" || -z "$LATEST_TAG" ]]; then
+            NEW_TAG="v1.0.0"
+          else
+            CLEAN_TAG="${LATEST_TAG#v}"
+            NEW_TAG="v$(echo $CLEAN_TAG | awk -F. '{if (NF<3) {print $1"."$2".0"} else {$NF++; print $0}}' OFS=.)"
+          fi
+
+          echo "New tag: $NEW_TAG"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_ENV
+
+      - name: Update version in package.json
+        run: |
+          NEW_VERSION="${{ env.new_tag }}"
+          NEW_VERSION="${NEW_VERSION#v}"
+
+          jq --arg version "$NEW_VERSION" '.version = $version' package.json > package.tmp && mv package.tmp package.json
+
+          if [ -f "package-lock.json" ]; then
+            jq --arg version "$NEW_VERSION" '.version = $version' package-lock.json > package-lock.tmp && mv package-lock.tmp package-lock.json
+          fi
+
+      - name: Create and push new tag
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
+          git add package.json package-lock.json
+          git commit -m "chore: update package version to ${{ env.new_tag }}"
+          git push origin main
+          git tag $new_tag
+          git push origin $new_tag
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+
+  deploy:
+    needs: tag_release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: root
+          password: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /projects/todo-list-api
+            git pull origin main
+            docker compose down
+            docker compose up -d --build --force-recreate
+            docker image prune -f
